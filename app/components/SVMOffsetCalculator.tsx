@@ -24,6 +24,7 @@ import {
 import Logo from "./Logo";
 import OffsetDisplay from "./OffsetDisplay";
 import { toast } from "sonner";
+import Image from "next/image";
 
 const AUTOSAVE_DELAY = 1000;
 
@@ -338,7 +339,7 @@ const SVMOffsetCalculator = () => {
         }}
       />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 min-h-[80vh]">
         <Card className="w-full max-w-4xl mx-auto bg-background/40">
           <CardContent className="space-y-6 pt-6">
             <div className="space-y-4">
@@ -393,6 +394,47 @@ const SVMOffsetCalculator = () => {
           </CardContent>
         </Card>
       </main>
+      <footer className="border-t border-border py-6 bg-background/95 backdrop-blur-sm">
+        <div className="container mx-auto px-4 flex flex-col sm:flex-row sm:justify-between items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Built with ❤️ by Blueshift
+            </span>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <a
+              href="https://github.com/deanmlittle/sbpf-xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground hover:scale-130 transition-all duration-200  text-sm font-medium group flex items-center gap-1"
+            >
+              <Image
+                src="/github.svg"
+                alt="GitHub logo"
+                width={16}
+                height={16}
+                className="group-hover:scale-110 transition-transform duration-200"
+              />
+              Contribute on GitHub
+            </a>
+            <a
+              href="https://x.com/blueshift_gg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground hover:scale-130 transition-all duration-200 text-sm font-medium group flex items-center gap-1"
+            >
+              <Image
+                src="/x.svg"
+                alt="X logo"
+                width={16}
+                height={16}
+                className="group-hover:scale-110 transition-transform duration-200"
+              />
+              Follow on X
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
