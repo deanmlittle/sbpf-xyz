@@ -20,6 +20,8 @@ import {
   Language,
   Project,
   ProjectSidebarProps,
+  TOKEN2022_EXTENSIONS,
+  Extension,
 } from "../types";
 import Logo from "./Logo";
 import OffsetDisplay from "./OffsetDisplay";
@@ -133,61 +135,142 @@ const AccountEntry = ({
   index,
   updateAccount,
   removeAccount,
-}: AccountEntryProps) => (
-  <div className="flex items-center gap-4 p-4 bg-background/5 rounded-lg border border-border">
-    <div className="flex-1 grid grid-cols-3 gap-4">
-      <Input
-        placeholder="Account name"
-        value={account.name}
-        onChange={(e) =>
-          updateAccount(index, { ...account, name: e.target.value })
-        }
-        className="bg-background"
-      />
-      <Select
-        value={account.type}
-        onValueChange={(value: keyof typeof ACCOUNT_TYPES) =>
-          updateAccount(index, {
-            ...account,
-            type: value,
-            dataLength: ACCOUNT_TYPES[value],
-          })
-        }
-      >
-        <SelectTrigger className="bg-background">
-          <SelectValue placeholder="Type" />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.keys(ACCOUNT_TYPES).map((type) => (
-            <SelectItem key={type} value={type}>
-              {type}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Input
-        type="number"
-        placeholder="Data length"
-        min="0"
-        value={account.dataLength}
-        onChange={(e) =>
-          updateAccount(index, {
-            ...account,
-            dataLength: parseInt(e.target.value),
-          })
-        }
-        className="bg-background"
-      />
+}: AccountEntryProps) => {
+  const handleAddExtension = (ext: Extension) => {
+    const newExtensions = [...(account.extensions || []), ext];
+    const newLength =
+      ACCOUNT_TYPES[account.type] +
+      newExtensions.reduce((sum, e) => sum + TOKEN2022_EXTENSIONS[e], 0);
+    updateAccount(index, {
+      ...account,
+      extensions: newExtensions,
+      dataLength: newLength,
+    });
+  };
+
+  const handleRemoveExtension = (ext: Extension) => {
+    const newExtensions = (account.extensions || []).filter((e) => e !== ext);
+    const newLength =
+      ACCOUNT_TYPES[account.type] +
+      newExtensions.reduce((sum, e) => sum + TOKEN2022_EXTENSIONS[e], 0);
+    updateAccount(index, {
+      ...account,
+      extensions: newExtensions,
+      dataLength: newLength,
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4 p-4 bg-background/5 rounded-lg border border-border">
+      <div className="flex items-center gap-4">
+        <div className="flex-1 grid grid-cols-3 gap-4">
+          <Input
+            placeholder="Account name"
+            value={account.name}
+            onChange={(e) =>
+              updateAccount(index, { ...account, name: e.target.value })
+            }
+            className="bg-background"
+          />
+          <Select
+            value={account.type}
+            onValueChange={(value: keyof typeof ACCOUNT_TYPES) => {
+              const baseLen = ACCOUNT_TYPES[value];
+              updateAccount(index, {
+                ...account,
+                type: value,
+                dataLength: baseLen,
+                extensions: value.startsWith("Token2022")
+                  ? account.extensions || []
+                  : [],
+              });
+            }}
+          >
+            <SelectTrigger className="bg-background">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(ACCOUNT_TYPES).map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            type="number"
+            placeholder={
+              account.type.startsWith("Token2022")
+                ? "82 + extensions"
+                : "Data length"
+            }
+            min="0"
+            value={account.dataLength}
+            onChange={(e) =>
+              updateAccount(index, {
+                ...account,
+                dataLength: parseInt(e.target.value),
+              })
+            }
+            className="bg-background"
+          />
+        </div>
+        <Button
+          variant="destructive"
+          size="icon"
+          onClick={() => removeAccount(index)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Extensions UI */}
+      {account.type.startsWith("Token2022") && (
+        <div className="pl-2 border-l-2 border-border flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">Extensions</span>
+            <Select onValueChange={(ext: Extension) => handleAddExtension(ext)}>
+              <SelectTrigger className="h-8 w-40">
+                <SelectValue placeholder="+ Add Extension" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(TOKEN2022_EXTENSIONS).map((ext) => (
+                  <SelectItem
+                    key={ext}
+                    value={ext}
+                    disabled={account.extensions?.includes(ext as Extension)}
+                  >
+                    {ext} (+{TOKEN2022_EXTENSIONS[ext as Extension]} bytes)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {account.extensions?.map((ext) => (
+              <div
+                key={ext}
+                className="flex items-center justify-between bg-background px-2 py-1 rounded"
+              >
+                <span className="text-xs">
+                  {ext} ({TOKEN2022_EXTENSIONS[ext]} bytes)
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemoveExtension(ext)}
+                >
+                  <Trash2 className="h-3 w-3 text-red-500" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
-    <Button
-      variant="destructive"
-      size="icon"
-      onClick={() => removeAccount(index)}
-    >
-      <Trash2 className="h-4 w-4" />
-    </Button>
-  </div>
-);
+  );
+};
 
 const SVMOffsetCalculator = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -228,6 +311,7 @@ const SVMOffsetCalculator = () => {
       name: `ACCOUNT${accounts.length + 1}`,
       type: "System" as keyof typeof ACCOUNT_TYPES,
       dataLength: 0,
+      extensions: [],
     };
     setAccounts([...accounts, newAccount]);
   };
