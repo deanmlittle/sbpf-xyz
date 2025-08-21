@@ -16,6 +16,8 @@ export const ACCOUNT_TYPES = {
   "SPL Mint": 82,
   "Token2022 Account": 165,
   "Token2022 Mint": 82,
+  "Sysvar Clock": 40,
+  "Sysvar Rent": 17,
 };
 
 export const TOKEN2022_EXTENSIONS = {
@@ -36,10 +38,11 @@ export type Account = {
 };
 
 export type Project = {
-  id: number;
+  id: string;
   name: string;
   accounts: Account[];
-  language: Language;
+  language?: Language; // Make optional for backwards compatibility
+  lastModified?: number; // Unix timestamp, optional for backwards compatibility
 };
 
 export interface ProjectSidebarProps {
@@ -49,6 +52,8 @@ export interface ProjectSidebarProps {
   currentProject: Project | null;
   onSelectProject: (project: Project) => void;
   onImport: (projectData: Project) => void;
+  onDeleteClick: (project: Project) => void;
+  onNewProject: () => void;
 }
 
 export interface AccountEntryProps {

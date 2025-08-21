@@ -1,7 +1,7 @@
 const Logo = () => (
   <svg viewBox="0 0 100 40" className="h-8 w-auto">
     <text x="10" y="25" className="font-mono font-bold fill-primary">
-      SBPF ASM
+      SBPF.XYZ
     </text>
     <rect
       x="70"
