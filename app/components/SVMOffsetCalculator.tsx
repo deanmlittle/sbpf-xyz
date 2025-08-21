@@ -54,11 +54,6 @@ import {
   InstructionDataField,
   INSTRUCTION_DATA_TYPES,
   InstructionDataType,
-  SPL_MINT_FIELDS,
-  SPL_TOKEN_FIELDS,
-  TOKEN2022_MINT_FIELDS,
-  SYSVAR_CLOCK_FIELDS,
-  SYSVAR_RENT_FIELDS,
 } from "../types";
 import Logo from "./Logo";
 import OffsetDisplay from "./OffsetDisplay";
