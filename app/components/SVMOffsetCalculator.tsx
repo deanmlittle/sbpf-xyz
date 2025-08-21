@@ -1,7 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Trash2, Plus, Menu, Download, Upload, X, FileText, Share2, Copy } from "lucide-react";
+import { Trash2, Plus, Menu, Download, Upload, X, FileText, Share2, Copy, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import {
+  CSS,
+} from '@dnd-kit/utilities';
 import { v4 as uuidv4 } from 'uuid';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +51,14 @@ import {
   ProjectSidebarProps,
   TOKEN2022_EXTENSIONS,
   Extension,
+  InstructionDataField,
+  INSTRUCTION_DATA_TYPES,
+  InstructionDataType,
+  SPL_MINT_FIELDS,
+  SPL_TOKEN_FIELDS,
+  TOKEN2022_MINT_FIELDS,
+  SYSVAR_CLOCK_FIELDS,
+  SYSVAR_RENT_FIELDS,
 } from "../types";
 import Logo from "./Logo";
 import OffsetDisplay from "./OffsetDisplay";
@@ -174,12 +201,302 @@ const ProjectSidebar = ({
   );
 };
 
-const AccountEntry = ({
+const SortableInstructionDataEntry = ({
+  field,
+  index,
+  fields,
+  updateField,
+  removeField,
+}: {
+  field: InstructionDataField;
+  index: number;
+  fields: InstructionDataField[];
+  updateField: (index: number, field: InstructionDataField) => void;
+  removeField: (index: number) => void;
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: index });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`${isDragging ? 'z-10' : ''}`}
+    >
+      <InstructionDataEntry
+        field={field}
+        index={index}
+        fields={fields}
+        updateField={updateField}
+        removeField={removeField}
+        dragHandle={
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
+            <GripVertical className="h-4 w-4 text-gray-400" />
+          </div>
+        }
+      />
+    </div>
+  );
+};
+
+const InstructionDataEntry = ({
+  field,
+  index,
+  fields,
+  updateField,
+  removeField,
+  dragHandle,
+}: {
+  field: InstructionDataField;
+  index: number;
+  fields: InstructionDataField[];
+  updateField: (index: number, field: InstructionDataField) => void;
+  removeField: (index: number) => void;
+  dragHandle?: React.ReactNode;
+}) => {
+  const isDuplicateFieldName = (name: string) => {
+    if (name.trim() === "") return false;
+    const duplicateIndexes = fields
+      .map((f, i) => f.name.toLowerCase() === name.toLowerCase() ? i : -1)
+      .filter(i => i !== -1);
+    return duplicateIndexes.length > 1 && duplicateIndexes[0] !== index;
+  };
+  return (
+    <div className="flex gap-2 items-end">
+      {dragHandle}
+      <div className="flex-1">
+        <Input
+          placeholder="Field name"
+          value={field.name}
+          onChange={(e) =>
+            updateField(index, { ...field, name: e.target.value })
+          }
+          className={`${
+            isDuplicateFieldName(field.name) && field.name.trim() !== ""
+              ? "border-red-500 focus:border-red-500" 
+              : ""
+          }`}
+        />
+        {isDuplicateFieldName(field.name) && field.name.trim() !== "" && (
+          <p className="text-xs text-red-500 mt-1">Field name must be unique</p>
+        )}
+      </div>
+      <div className="w-32">
+        <Select
+          value={field.type}
+          onValueChange={(value: InstructionDataType) =>
+            updateField(index, { ...field, type: value, size: value === "[u8;N]" ? field.size || 1 : undefined })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(INSTRUCTION_DATA_TYPES).map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {field.type === "[u8;N]" && (
+        <div className="w-20">
+          <Input
+            type="number"
+            placeholder="Size"
+            min="1"
+            value={field.size || ""}
+            onChange={(e) =>
+              updateField(index, { ...field, size: parseInt(e.target.value) || 1 })
+            }
+          />
+        </div>
+      )}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => removeField(index)}
+        className="text-red-500 hover:text-red-600"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+};
+
+const SortableAccountEntry = ({
   account,
   index,
+  accounts,
   updateAccount,
   removeAccount,
 }: AccountEntryProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: index });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`${isDragging ? 'z-10' : ''}`}
+    >
+      <AccountEntry
+        account={account}
+        index={index}
+        accounts={accounts}
+        updateAccount={updateAccount}
+        removeAccount={removeAccount}
+        dragHandle={
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
+            <GripVertical className="h-4 w-4 text-gray-400" />
+          </div>
+        }
+      />
+    </div>
+  );
+};
+
+const AccountEntry = ({
+  account,
+  index,
+  accounts,
+  updateAccount,
+  removeAccount,
+  dragHandle,
+}: AccountEntryProps & { dragHandle?: React.ReactNode }) => {
+  const SortableCustomField = ({
+    field,
+    fieldIndex,
+    handleUpdateCustomField,
+    handleRemoveCustomField,
+  }: {
+    field: { name: string; type: InstructionDataType; size?: number };
+    fieldIndex: number;
+    handleUpdateCustomField: (index: number, field: { name: string; type: InstructionDataType; size?: number }) => void;
+    handleRemoveCustomField: (index: number) => void;
+  }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: fieldIndex });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`flex gap-2 items-end bg-background px-2 py-2 rounded ${isDragging ? 'z-10' : ''}`}
+      >
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
+          <GripVertical className="h-3 w-3 text-gray-400" />
+        </div>
+        <div className="flex-1">
+          <Input
+            placeholder="Field name"
+            value={field.name}
+            onChange={(e) =>
+              handleUpdateCustomField(fieldIndex, { ...field, name: e.target.value })
+            }
+            className={`h-8 text-xs ${
+              isDuplicateCustomFieldName(field.name, fieldIndex) && field.name.trim() !== ""
+                ? "border-red-500 focus:border-red-500" 
+                : ""
+            }`}
+          />
+          {isDuplicateCustomFieldName(field.name, fieldIndex) && field.name.trim() !== "" && (
+            <p className="text-xs text-red-500 mt-1">Field name must be unique</p>
+          )}
+        </div>
+        <div className="w-24">
+          <Select
+            value={field.type}
+            onValueChange={(value: InstructionDataType) =>
+              handleUpdateCustomField(fieldIndex, { 
+                ...field, 
+                type: value, 
+                size: value === "[u8;N]" ? field.size || 1 : undefined 
+              })
+            }
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(INSTRUCTION_DATA_TYPES).map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {field.type === "[u8;N]" && (
+          <div className="w-16">
+            <Input
+              type="number"
+              placeholder="Size"
+              min="1"
+              value={field.size || ""}
+              onChange={(e) =>
+                handleUpdateCustomField(fieldIndex, { 
+                  ...field, 
+                  size: parseInt(e.target.value) || 1 
+                })
+              }
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => handleRemoveCustomField(fieldIndex)}
+          className="h-8 w-8 text-red-500 hover:text-red-600"
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    );
+  };
+
+  const customFieldSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const handleAddExtension = (ext: Extension) => {
     const newExtensions = [...(account.extensions || []), ext];
     const newLength =
@@ -204,18 +521,104 @@ const AccountEntry = ({
     });
   };
 
+  const handleAddCustomField = () => {
+    const newField = {
+      name: `field_${(account.customFields?.length || 0) + 1}`,
+      type: "u8" as InstructionDataType,
+    };
+    const newCustomFields = [...(account.customFields || []), newField];
+    const newLength = calculateCustomFieldsSize(newCustomFields);
+    updateAccount(index, {
+      ...account,
+      customFields: newCustomFields,
+      dataLength: newLength,
+    });
+  };
+
+  const handleRemoveCustomField = (fieldIndex: number) => {
+    const newCustomFields = (account.customFields || []).filter((_, i) => i !== fieldIndex);
+    const newLength = calculateCustomFieldsSize(newCustomFields);
+    updateAccount(index, {
+      ...account,
+      customFields: newCustomFields,
+      dataLength: newLength,
+    });
+  };
+
+  const handleUpdateCustomField = (fieldIndex: number, updatedField: { name: string; type: InstructionDataType; size?: number }) => {
+    const newCustomFields = [...(account.customFields || [])];
+    newCustomFields[fieldIndex] = updatedField;
+    const newLength = calculateCustomFieldsSize(newCustomFields);
+    updateAccount(index, {
+      ...account,
+      customFields: newCustomFields,
+      dataLength: newLength,
+    });
+  };
+
+  const calculateCustomFieldsSize = (fields: { name: string; type: InstructionDataType; size?: number }[]) => {
+    return fields.reduce((total, field) => {
+      if (field.type === "[u8;N]") {
+        return total + (field.size || 0);
+      }
+      return total + INSTRUCTION_DATA_TYPES[field.type];
+    }, 0);
+  };
+
+  const isDuplicateName = (name: string) => {
+    if (name.trim() === "") return false;
+    const duplicateIndexes = accounts
+      .map((acc, i) => acc.name.toLowerCase() === name.toLowerCase() ? i : -1)
+      .filter(i => i !== -1);
+    return duplicateIndexes.length > 1 && duplicateIndexes[0] !== index;
+  };
+
+  const isDuplicateCustomFieldName = (name: string, fieldIndex: number) => {
+    if (name.trim() === "" || !account.customFields) return false;
+    const duplicateIndexes = account.customFields
+      .map((field, i) => field.name.toLowerCase() === name.toLowerCase() ? i : -1)
+      .filter(i => i !== -1);
+    return duplicateIndexes.length > 1 && duplicateIndexes[0] !== fieldIndex;
+  };
+
+  const handleCustomFieldDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id && account.customFields) {
+      const oldIndex = active.id as number;
+      const newIndex = over.id as number;
+      const reorderedFields = arrayMove(account.customFields, oldIndex, newIndex);
+      updateAccount(index, {
+        ...account,
+        customFields: reorderedFields,
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 bg-background/5 rounded-lg border border-border">
       <div className="flex items-center gap-4">
+        {dragHandle}
         <div className="flex-1 grid grid-cols-3 gap-4">
-          <Input
-            placeholder="Account name"
-            value={account.name}
-            onChange={(e) =>
-              updateAccount(index, { ...account, name: e.target.value })
-            }
-            className="bg-background"
-          />
+          <div className="flex-1">
+            <Input
+              placeholder="Account name"
+              value={account.name}
+              onChange={(e) => {
+                const newName = e.target.value;
+                // Always allow the update to show the input, validation happens visually
+                updateAccount(index, { ...account, name: newName });
+              }}
+              className={`bg-background ${
+                isDuplicateName(account.name) && account.name.trim() !== ""
+                  ? "border-red-500 focus:border-red-500" 
+                  : ""
+              }`}
+            />
+            {isDuplicateName(account.name) && account.name.trim() !== "" && (
+              <p className="text-xs text-red-500 mt-1">Account name must be unique</p>
+            )}
+          </div>
           <Select
             value={account.type}
             onValueChange={(value: keyof typeof ACCOUNT_TYPES) => {
@@ -256,7 +659,12 @@ const AccountEntry = ({
                 dataLength: parseInt(e.target.value),
               })
             }
-            className="bg-background"
+            disabled={account.type === "SPL Token" || account.type === "SPL Mint" || account.type === "TypedAccount"}
+            className={`bg-background ${
+              account.type === "SPL Token" || account.type === "SPL Mint" || account.type === "TypedAccount"
+                ? "opacity-60 cursor-not-allowed" 
+                : ""
+            }`}
           />
         </div>
         <Button
@@ -312,12 +720,46 @@ const AccountEntry = ({
           </div>
         </div>
       )}
+
+      {/* Custom Fields UI for TypedAccount */}
+      {account.type === "TypedAccount" && (
+        <div className="pl-2 border-l-2 border-border flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-semibold">Custom Fields</span>
+            <Button onClick={handleAddCustomField} size="sm" className="h-8">
+              <Plus className="h-3 w-3 mr-1" />
+              Add Field
+            </Button>
+          </div>
+
+          <DndContext
+            sensors={customFieldSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleCustomFieldDragEnd}
+          >
+            <SortableContext items={account.customFields?.map((_, i) => i) || []} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-2">
+                {account.customFields?.map((field, fieldIndex) => (
+                  <SortableCustomField
+                    key={fieldIndex}
+                    field={field}
+                    fieldIndex={fieldIndex}
+                    handleUpdateCustomField={handleUpdateCustomField}
+                    handleRemoveCustomField={handleRemoveCustomField}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
     </div>
   );
 };
 
 const SVMOffsetCalculator = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [instructionData, setInstructionData] = useState<InstructionDataField[]>([]);
   const [language, setLanguage] = useState<Language>("ASM");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -330,6 +772,36 @@ const SVMOffsetCalculator = () => {
   const [conflictModalOpen, setConflictModalOpen] = useState(false);
   const [conflictProject, setConflictProject] = useState<Project | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle account reordering
+  const handleAccountDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = active.id as number;
+      const newIndex = over.id as number;
+      setAccounts(arrayMove(accounts, oldIndex, newIndex));
+    }
+  };
+
+  // Handle instruction data field reordering
+  const handleInstructionDataDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = active.id as number;
+      const newIndex = over.id as number;
+      setInstructionData(arrayMove(instructionData, oldIndex, newIndex));
+    }
+  };
 
   // Save last opened project ID
   const saveLastProjectId = (projectId: string) => {
@@ -369,6 +841,7 @@ const SVMOffsetCalculator = () => {
               // No conflict - load directly (inline to avoid dependency)
               setCurrentProject(projectData);
               setAccounts(projectData.accounts);
+              setInstructionData(projectData.instructionData || []);
               setLanguage(projectData.language || "ASM");
               setShowWelcome(false);
               saveLastProjectId(projectData.id);
@@ -392,6 +865,7 @@ const SVMOffsetCalculator = () => {
             if (lastProject) {
               setCurrentProject(lastProject);
               setAccounts(lastProject.accounts);
+              setInstructionData(lastProject.instructionData || []);
               setLanguage(lastProject.language || "ASM");
             } else {
               // Last project ID exists but project not found - show welcome
@@ -425,6 +899,7 @@ const SVMOffsetCalculator = () => {
           const updatedProject: Project = {
             ...currentProject,
             accounts,
+            instructionData,
             language,
             lastModified: Date.now(),
           };
@@ -451,7 +926,7 @@ const SVMOffsetCalculator = () => {
 
       return () => clearTimeout(saveTimeout);
     }
-  }, [accounts, language, currentProject, projects]);
+  }, [accounts, instructionData, language, currentProject, projects]);
 
   const addAccount = () => {
     const newAccount: Account = {
@@ -461,6 +936,24 @@ const SVMOffsetCalculator = () => {
       extensions: [],
     };
     setAccounts([...accounts, newAccount]);
+  };
+
+  const addInstructionDataField = () => {
+    const newField: InstructionDataField = {
+      name: `field_${instructionData.length + 1}`,
+      type: "u8" as InstructionDataType,
+    };
+    setInstructionData([...instructionData, newField]);
+  };
+
+  const updateInstructionDataField = (index: number, updatedField: InstructionDataField) => {
+    const updated = [...instructionData];
+    updated[index] = updatedField;
+    setInstructionData(updated);
+  };
+
+  const removeInstructionDataField = (index: number) => {
+    setInstructionData(instructionData.filter((_, i) => i !== index));
   };
 
   const updateAccount = (index: number, updatedAccount: Account) => {
@@ -518,6 +1011,7 @@ const SVMOffsetCalculator = () => {
             const nextProject = updatedProjects[0];
             setCurrentProject(nextProject);
             setAccounts(nextProject.accounts);
+            setInstructionData(nextProject.instructionData || []);
             setLanguage(nextProject.language || "ASM");
             setShowWelcome(false); // Ensure we don't show welcome screen
             // Update the last project ID in localStorage
@@ -530,6 +1024,7 @@ const SVMOffsetCalculator = () => {
             // No projects left, show welcome screen
             setCurrentProject(null);
             setAccounts([]);
+            setInstructionData([]);
             setLanguage("ASM");
             setShowWelcome(true);
             // Clear the last project ID from localStorage
@@ -566,6 +1061,7 @@ const SVMOffsetCalculator = () => {
     };
     setCurrentProject(newProject);
     setAccounts([]);
+    setInstructionData([]);
     saveLastProjectId(newProject.id);
     setShowWelcome(false); // Hide welcome screen
   };
@@ -653,6 +1149,7 @@ const SVMOffsetCalculator = () => {
     
     setCurrentProject(finalProject);
     setAccounts(finalProject.accounts);
+    setInstructionData(finalProject.instructionData || []);
     setLanguage(finalProject.language || "ASM");
     setShowWelcome(false);
     saveLastProjectId(finalProject.id);
@@ -777,6 +1274,7 @@ const SVMOffsetCalculator = () => {
         onSelectProject={(project) => {
           setCurrentProject(project);
           setAccounts(project.accounts);
+          setInstructionData(project.instructionData || []);
           setLanguage(project.language || "ASM");
           setIsSidebarOpen(false);
           setShowWelcome(false);
@@ -791,6 +1289,7 @@ const SVMOffsetCalculator = () => {
           setProjects([...projects, newProject]);
           setCurrentProject(newProject);
           setAccounts(projectData.accounts);
+          setInstructionData(projectData.instructionData || []);
           setLanguage(projectData.language || "ASM");
           setIsSidebarOpen(false);
           setShowWelcome(false);
@@ -806,30 +1305,31 @@ const SVMOffsetCalculator = () => {
             <Card className="w-full max-w-2xl mx-auto bg-background/40">
               <CardContent className="space-y-6 pt-8 pb-8 text-center">
                 <div className="space-y-4">
-                  <h1 className="text-4xl font-bold text-primary">Welcome to SVM Offset Calculator</h1>
-                  <p className="text-lg text-muted-foreground max-w-lg mx-auto">
+                  <h1 className="text-2xl font-bold text-primary">sbpf.xyz</h1>
+                  <p className="text-sm text-muted-foreground max-w-lg mx-auto">
                     Calculate memory offsets for Solana accounts in your programs. Add accounts, configure their types and data lengths, and get precise offset calculations for ASM, Rust, and C.
                   </p>
                 </div>
-                <div className="pt-6 space-y-4">
-                  <Button 
-                    onClick={createNewProject} 
-                    size="lg"
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-3 text-lg"
-                  >
-                    <FileText className="h-5 w-5 mr-3" />
-                    New Project
-                  </Button>
-                  <div className="text-sm text-muted-foreground">or</div>
-                  <Button 
-                    onClick={handleImportFromWelcome} 
-                    size="lg"
-                    variant="outline"
-                    className="px-8 py-3 text-lg"
-                  >
-                    <Upload className="h-5 w-5 mr-3" />
-                    Import Project
-                  </Button>
+                <div className="pt-6">
+                  <div className="flex gap-4 justify-center">
+                    <Button 
+                      onClick={createNewProject} 
+                      size="lg"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      New Project
+                    </Button>
+                    <Button 
+                      onClick={handleImportFromWelcome} 
+                      size="lg"
+                      variant="outline"
+                      className="px-6 py-3"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import Project
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -837,23 +1337,65 @@ const SVMOffsetCalculator = () => {
         ) : (
           <Card className="w-full max-w-4xl mx-auto bg-background/40">
             <CardContent className="space-y-6 pt-6">
-              <div className="space-y-4">
-                {accounts.map((account, index) => (
-                  <AccountEntry
-                    key={index}
-                    index={index}
-                    account={account}
-                    updateAccount={updateAccount}
-                    removeAccount={removeAccount}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleAccountDragEnd}
+              >
+                <SortableContext items={accounts.map((_, index) => index)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-4">
+                    {accounts.map((account, index) => (
+                      <SortableAccountEntry
+                        key={index}
+                        index={index}
+                        account={account}
+                        accounts={accounts}
+                        updateAccount={updateAccount}
+                        removeAccount={removeAccount}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
 
               <div className="flex gap-4 items-center">
                 <Button onClick={addAccount} className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
                   <Plus className="h-4 w-4" />
                   Add Account
                 </Button>
+              </div>
+
+              {/* Instruction Data Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">Instruction Data</h3>
+                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleInstructionDataDragEnd}
+                >
+                  <SortableContext items={instructionData.map((_, index) => index)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2">
+                      {instructionData.map((field, index) => (
+                        <SortableInstructionDataEntry
+                          key={index}
+                          index={index}
+                          field={field}
+                          fields={instructionData}
+                          updateField={updateInstructionDataField}
+                          removeField={removeInstructionDataField}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+                <div className="flex gap-4 items-center">
+                  <Button onClick={addInstructionDataField} className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Plus className="h-4 w-4" />
+                    Add Field
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-col">
                 <Tabs
@@ -884,7 +1426,7 @@ const SVMOffsetCalculator = () => {
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
-                <OffsetDisplay accounts={accounts} language={language} />
+                <OffsetDisplay accounts={accounts} instructionData={instructionData} language={language} />
               </div>
             </CardContent>
           </Card>
