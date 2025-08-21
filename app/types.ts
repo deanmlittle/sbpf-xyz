@@ -1,33 +1,33 @@
 export interface OffsetDisplayProps {
-    accounts: Account[];
-    language: Language;
-}
-  
-export interface Offset {
-    name: string;
-    offset: string;
+  accounts: Account[];
+  language: Language;
 }
 
-export type Language = 'ASM' | 'Rust' | 'C';
+export interface Offset {
+  name: string;
+  offset: string;
+}
+
+export type Language = "ASM" | "Rust" | "C";
 
 export const ACCOUNT_TYPES = {
   System: 0,
-  'SPL Token': 165,
-  'SPL Mint': 82,
+  "SPL Token": 165,
+  "SPL Mint": 82,
 };
 
 export type Account = {
   name: string;
   type: keyof typeof ACCOUNT_TYPES;
   dataLength: number;
-}
+};
 
 export type Project = {
   id: number;
   name: string;
   accounts: Account[];
   language: Language;
-}
+};
 
 export interface ProjectSidebarProps {
   isOpen: boolean;
