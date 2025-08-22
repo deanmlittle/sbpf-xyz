@@ -103,6 +103,7 @@ export type Account = {
   dataLength: number;
   extensions?: Extension[];
   customFields?: {
+    id?: string;
     name: string;
     type: InstructionDataType;
     size?: number;
@@ -115,6 +116,7 @@ export type TypedAccount = {
   dataLength: number;
   extensions?: Extension[];
   customFields?: {
+    id?: string;
     name: string;
     type: InstructionDataType;
     size?: number;

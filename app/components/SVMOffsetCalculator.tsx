@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { Trash2, Plus, Menu, Download, Upload, X, FileText, Share2, Copy, GripVertical } from "lucide-react";
 import {
   DndContext,
@@ -374,6 +374,154 @@ const SortableAccountEntry = ({
   );
 };
 
+const SortableCustomField = memo(({
+  field,
+  fieldIndex,
+  accountIndex,
+  customFields,
+  updateAccount,
+  account,
+}: {
+  field: { id?: string; name: string; type: InstructionDataType; size?: number };
+  fieldIndex: number;
+  accountIndex: number;
+  customFields: { id?: string; name: string; type: InstructionDataType; size?: number }[];
+  updateAccount: (index: number, updatedAccount: Account) => void;
+  account: Account;
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: fieldIndex });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const handleUpdateCustomField = (updatedField: { id?: string; name: string; type: InstructionDataType; size?: number }) => {
+    const newCustomFields = [...customFields];
+    newCustomFields[fieldIndex] = updatedField;
+    const newLength = newCustomFields.reduce((total, f) => {
+      if (f.type === "[u8;N]") {
+        return total + (f.size || 0);
+      }
+      return total + INSTRUCTION_DATA_TYPES[f.type];
+    }, 0);
+    updateAccount(accountIndex, {
+      ...account,
+      customFields: newCustomFields,
+      dataLength: newLength,
+    });
+  };
+
+  const handleRemoveCustomField = () => {
+    const newCustomFields = customFields.filter((_, i) => i !== fieldIndex);
+    const newLength = newCustomFields.reduce((total, f) => {
+      if (f.type === "[u8;N]") {
+        return total + (f.size || 0);
+      }
+      return total + INSTRUCTION_DATA_TYPES[f.type];
+    }, 0);
+    updateAccount(accountIndex, {
+      ...account,
+      customFields: newCustomFields,
+      dataLength: newLength,
+    });
+  };
+
+  const isDuplicateCustomFieldName = (name: string) => {
+    if (name.trim() === "" || !customFields) return false;
+    const duplicateIndexes = customFields
+      .map((f, i) => f.name.toLowerCase() === name.toLowerCase() ? i : -1)
+      .filter(i => i !== -1);
+    return duplicateIndexes.length > 1 && duplicateIndexes[0] !== fieldIndex;
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex gap-2 items-end bg-background px-2 py-2 rounded ${isDragging ? 'z-10' : ''}`}
+    >
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
+        <GripVertical className="h-3 w-3 text-gray-400" />
+      </div>
+      <div className="flex-1">
+        <Input
+          placeholder="Field name"
+          value={field.name}
+          onChange={(e) =>
+            handleUpdateCustomField({ ...field, name: e.target.value })
+          }
+          className={`h-8 text-xs ${
+            isDuplicateCustomFieldName(field.name) && field.name.trim() !== ""
+              ? "border-red-500 focus:border-red-500" 
+              : ""
+          }`}
+        />
+        {isDuplicateCustomFieldName(field.name) && field.name.trim() !== "" && (
+          <p className="text-xs text-red-500 mt-1">Field name must be unique</p>
+        )}
+      </div>
+      <div className="w-24">
+        <Select
+          value={field.type}
+          onValueChange={(value: InstructionDataType) =>
+            handleUpdateCustomField({ 
+              ...field, 
+              type: value, 
+              size: value === "[u8;N]" ? field.size || 1 : undefined 
+            })
+          }
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(INSTRUCTION_DATA_TYPES).map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {field.type === "[u8;N]" && (
+        <div className="w-16">
+          <Input
+            type="number"
+            placeholder="Size"
+            min="1"
+            value={field.size || ""}
+            onChange={(e) =>
+              handleUpdateCustomField({ 
+                ...field, 
+                size: parseInt(e.target.value) || 1 
+              })
+            }
+            className="h-8 text-xs"
+          />
+        </div>
+      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleRemoveCustomField}
+        className="h-8 w-8 text-red-500 hover:text-red-600"
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+});
+
+SortableCustomField.displayName = 'SortableCustomField';
+
 const AccountEntry = ({
   account,
   index,
@@ -382,108 +530,6 @@ const AccountEntry = ({
   removeAccount,
   dragHandle,
 }: AccountEntryProps & { dragHandle?: React.ReactNode }) => {
-  const SortableCustomField = ({
-    field,
-    fieldIndex,
-    handleUpdateCustomField,
-    handleRemoveCustomField,
-  }: {
-    field: { name: string; type: InstructionDataType; size?: number };
-    fieldIndex: number;
-    handleUpdateCustomField: (index: number, field: { name: string; type: InstructionDataType; size?: number }) => void;
-    handleRemoveCustomField: (index: number) => void;
-  }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: fieldIndex });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
-
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className={`flex gap-2 items-end bg-background px-2 py-2 rounded ${isDragging ? 'z-10' : ''}`}
-      >
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
-          <GripVertical className="h-3 w-3 text-gray-400" />
-        </div>
-        <div className="flex-1">
-          <Input
-            placeholder="Field name"
-            value={field.name}
-            onChange={(e) =>
-              handleUpdateCustomField(fieldIndex, { ...field, name: e.target.value })
-            }
-            className={`h-8 text-xs ${
-              isDuplicateCustomFieldName(field.name, fieldIndex) && field.name.trim() !== ""
-                ? "border-red-500 focus:border-red-500" 
-                : ""
-            }`}
-          />
-          {isDuplicateCustomFieldName(field.name, fieldIndex) && field.name.trim() !== "" && (
-            <p className="text-xs text-red-500 mt-1">Field name must be unique</p>
-          )}
-        </div>
-        <div className="w-24">
-          <Select
-            value={field.type}
-            onValueChange={(value: InstructionDataType) =>
-              handleUpdateCustomField(fieldIndex, { 
-                ...field, 
-                type: value, 
-                size: value === "[u8;N]" ? field.size || 1 : undefined 
-              })
-            }
-          >
-            <SelectTrigger className="h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(INSTRUCTION_DATA_TYPES).map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {field.type === "[u8;N]" && (
-          <div className="w-16">
-            <Input
-              type="number"
-              placeholder="Size"
-              min="1"
-              value={field.size || ""}
-              onChange={(e) =>
-                handleUpdateCustomField(fieldIndex, { 
-                  ...field, 
-                  size: parseInt(e.target.value) || 1 
-                })
-              }
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => handleRemoveCustomField(fieldIndex)}
-          className="h-8 w-8 text-red-500 hover:text-red-600"
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-    );
-  };
 
   const customFieldSensors = useSensors(
     useSensor(PointerSensor),
@@ -518,6 +564,7 @@ const AccountEntry = ({
 
   const handleAddCustomField = () => {
     const newField = {
+      id: uuidv4(),
       name: `field_${(account.customFields?.length || 0) + 1}`,
       type: "u8" as InstructionDataType,
     };
@@ -530,28 +577,7 @@ const AccountEntry = ({
     });
   };
 
-  const handleRemoveCustomField = (fieldIndex: number) => {
-    const newCustomFields = (account.customFields || []).filter((_, i) => i !== fieldIndex);
-    const newLength = calculateCustomFieldsSize(newCustomFields);
-    updateAccount(index, {
-      ...account,
-      customFields: newCustomFields,
-      dataLength: newLength,
-    });
-  };
-
-  const handleUpdateCustomField = (fieldIndex: number, updatedField: { name: string; type: InstructionDataType; size?: number }) => {
-    const newCustomFields = [...(account.customFields || [])];
-    newCustomFields[fieldIndex] = updatedField;
-    const newLength = calculateCustomFieldsSize(newCustomFields);
-    updateAccount(index, {
-      ...account,
-      customFields: newCustomFields,
-      dataLength: newLength,
-    });
-  };
-
-  const calculateCustomFieldsSize = (fields: { name: string; type: InstructionDataType; size?: number }[]) => {
+  const calculateCustomFieldsSize = (fields: { id?: string; name: string; type: InstructionDataType; size?: number }[]) => {
     return fields.reduce((total, field) => {
       if (field.type === "[u8;N]") {
         return total + (field.size || 0);
@@ -568,13 +594,7 @@ const AccountEntry = ({
     return duplicateIndexes.length > 1 && duplicateIndexes[0] !== index;
   };
 
-  const isDuplicateCustomFieldName = (name: string, fieldIndex: number) => {
-    if (name.trim() === "" || !account.customFields) return false;
-    const duplicateIndexes = account.customFields
-      .map((field, i) => field.name.toLowerCase() === name.toLowerCase() ? i : -1)
-      .filter(i => i !== -1);
-    return duplicateIndexes.length > 1 && duplicateIndexes[0] !== fieldIndex;
-  };
+
 
   const handleCustomFieldDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -732,15 +752,17 @@ const AccountEntry = ({
             collisionDetection={closestCenter}
             onDragEnd={handleCustomFieldDragEnd}
           >
-            <SortableContext items={account.customFields?.map((_, i) => i) || []} strategy={verticalListSortingStrategy}>
+            <SortableContext items={account.customFields?.map((_, index) => index) || []} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-2">
                 {account.customFields?.map((field, fieldIndex) => (
                   <SortableCustomField
-                    key={fieldIndex}
+                    key={field.id || `field-${index}-${fieldIndex}`}
                     field={field}
                     fieldIndex={fieldIndex}
-                    handleUpdateCustomField={handleUpdateCustomField}
-                    handleRemoveCustomField={handleRemoveCustomField}
+                    accountIndex={index}
+                    customFields={account.customFields || []}
+                    updateAccount={updateAccount}
+                    account={account}
                   />
                 ))}
               </div>
@@ -834,8 +856,21 @@ const SVMOffsetCalculator = () => {
               setConflictModalOpen(true);
             } else {
               // No conflict - load directly (inline to avoid dependency)
+              // Migrate custom fields to ensure they have IDs
+              const migratedAccounts = projectData.accounts.map((account: Account) => {
+                if (account.type === "TypedAccount" && account.customFields) {
+                  return {
+                    ...account,
+                    customFields: account.customFields.map(field => 
+                      field.id ? field : { ...field, id: uuidv4() }
+                    )
+                  };
+                }
+                return account;
+              });
+              
               setCurrentProject(projectData);
-              setAccounts(projectData.accounts);
+              setAccounts(migratedAccounts);
               setInstructionData(projectData.instructionData || []);
               setLanguage(projectData.language || "ASM");
               setShowWelcome(false);
@@ -858,8 +893,21 @@ const SVMOffsetCalculator = () => {
           if (lastProjectId && parsedProjects.length > 0) {
             const lastProject = parsedProjects.find((p: Project) => p.id === lastProjectId);
             if (lastProject) {
+              // Migrate custom fields to ensure they have IDs
+              const migratedAccounts = lastProject.accounts.map((account: Account) => {
+                if (account.type === "TypedAccount" && account.customFields) {
+                  return {
+                    ...account,
+                    customFields: account.customFields.map(field => 
+                      field.id ? field : { ...field, id: uuidv4() }
+                    )
+                  };
+                }
+                return account;
+              });
+              
               setCurrentProject(lastProject);
-              setAccounts(lastProject.accounts);
+              setAccounts(migratedAccounts);
               setInstructionData(lastProject.instructionData || []);
               setLanguage(lastProject.language || "ASM");
             } else {
@@ -951,11 +999,13 @@ const SVMOffsetCalculator = () => {
     setInstructionData(instructionData.filter((_, i) => i !== index));
   };
 
-  const updateAccount = (index: number, updatedAccount: Account) => {
-    const updatedAccounts = [...accounts];
-    updatedAccounts[index] = updatedAccount;
-    setAccounts(updatedAccounts);
-  };
+  const updateAccount = useCallback((index: number, updatedAccount: Account) => {
+    setAccounts(prevAccounts => {
+      const updatedAccounts = [...prevAccounts];
+      updatedAccounts[index] = updatedAccount;
+      return updatedAccounts;
+    });
+  }, []);
 
   const removeAccount = (index: number) => {
     const updatedAccounts = accounts.filter((_, i) => i !== index);
@@ -1125,25 +1175,40 @@ const SVMOffsetCalculator = () => {
   };
 
   const loadSharedProject = (projectData: Project, override: boolean = false) => {
+    // Migrate custom fields to ensure they have IDs
+    const migratedAccounts = projectData.accounts.map(account => {
+      if (account.type === "TypedAccount" && account.customFields) {
+        return {
+          ...account,
+          customFields: account.customFields.map(field => 
+            field.id ? field : { ...field, id: uuidv4() }
+          )
+        };
+      }
+      return account;
+    });
+    
     let finalProject: Project;
     
     if (override) {
       // Override existing project with same UUID
       finalProject = {
         ...projectData,
+        accounts: migratedAccounts,
         lastModified: Date.now(),
       };
     } else {
       // Create new project with new UUID
       finalProject = {
         ...projectData,
+        accounts: migratedAccounts,
         id: uuidv4(),
         lastModified: Date.now(),
       };
     }
     
     setCurrentProject(finalProject);
-    setAccounts(finalProject.accounts);
+    setAccounts(migratedAccounts);
     setInstructionData(finalProject.instructionData || []);
     setLanguage(finalProject.language || "ASM");
     setShowWelcome(false);
@@ -1267,8 +1332,21 @@ const SVMOffsetCalculator = () => {
         projects={projects}
         currentProject={currentProject}
         onSelectProject={(project) => {
+          // Migrate custom fields to ensure they have IDs
+          const migratedAccounts = project.accounts.map(account => {
+            if (account.type === "TypedAccount" && account.customFields) {
+              return {
+                ...account,
+                customFields: account.customFields.map(field => 
+                  field.id ? field : { ...field, id: uuidv4() }
+                )
+              };
+            }
+            return account;
+          });
+          
           setCurrentProject(project);
-          setAccounts(project.accounts);
+          setAccounts(migratedAccounts);
           setInstructionData(project.instructionData || []);
           setLanguage(project.language || "ASM");
           setIsSidebarOpen(false);
@@ -1276,14 +1354,28 @@ const SVMOffsetCalculator = () => {
           saveLastProjectId(project.id);
         }}
         onImport={(projectData) => {
+          // Migrate custom fields to ensure they have IDs
+          const migratedAccounts = projectData.accounts.map(account => {
+            if (account.type === "TypedAccount" && account.customFields) {
+              return {
+                ...account,
+                customFields: account.customFields.map(field => 
+                  field.id ? field : { ...field, id: uuidv4() }
+                )
+              };
+            }
+            return account;
+          });
+          
           const newProject = {
             ...projectData,
+            accounts: migratedAccounts,
             id: uuidv4(), // Generate new UUID for imported project
             lastModified: Date.now(),
           };
           setProjects([...projects, newProject]);
           setCurrentProject(newProject);
-          setAccounts(projectData.accounts);
+          setAccounts(migratedAccounts);
           setInstructionData(projectData.instructionData || []);
           setLanguage(projectData.language || "ASM");
           setIsSidebarOpen(false);
